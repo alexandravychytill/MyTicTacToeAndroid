@@ -111,6 +111,7 @@ class TicTacToe : AppCompatActivity() {
             findViewById(R.id.button9)
         )
 
+
         for (i in 0 until buttonList.size) {
             if (fireBaseService.getGame().moves[i].id == i) {
                 buttonList[i].isEnabled = false
