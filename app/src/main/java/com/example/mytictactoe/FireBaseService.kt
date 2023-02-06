@@ -2,6 +2,7 @@ package com.example.mytictactoe
 
 import android.content.ContentValues.TAG
 import android.util.Log
+import androidx.lifecycle.MutableLiveData
 import com.example.mytictactoe.model.Game
 import com.example.mytictactoe.model.Move
 import com.google.firebase.firestore.FirebaseFirestore
@@ -11,6 +12,7 @@ class FireBaseService {
     private var db: FirebaseFirestore = FirebaseFirestore.getInstance()
     val ref = db.collection("Game")
     private lateinit var game: Game
+    val gameLiveData = MutableLiveData<Game>()
 
     fun getGame(): Game {
         return game
@@ -18,7 +20,7 @@ class FireBaseService {
 
     fun startGame(userId: String){
         ref.whereEqualTo("player2Id", "")
-           // .whereNotEqualTo("player1Id", userId)
+         //   .whereNotEqualTo("player1Id", userId)
             .get()
             .addOnSuccessListener { querySnapshot ->
                 if (querySnapshot.documents.isNotEmpty()) {
@@ -28,12 +30,11 @@ class FireBaseService {
                     game.blockMoveForPlayerId = userId
                     ref.document(gameData.id).set(game)
                         .addOnSuccessListener {
-                           // listenForGameChanges()
+                            listenForChanges()
                         }
                         .addOnFailureListener { error ->
                             Log.d(TAG, "Error updating game: $error")
                         }
-                    listenForChanges()
                 } else {
                     game = createOnlineGame(userId)
                 }
@@ -46,7 +47,7 @@ class FireBaseService {
 
     fun createOnlineGame(userId: String): Game {
         db.collection("Game")
-        game = Game(UUID.randomUUID().toString(), userId, "", "1", "", listOf(Move(0), Move(1), Move(2), Move(3), Move(4), Move(5), Move(6), Move(7), Move(8)))
+        game = Game(UUID.randomUUID().toString(), userId, "", userId, "",true, listOf(Move(0), Move(1), Move(2), Move(3), Move(4), Move(5), Move(6), Move(7), Move(8)))
         val ref = FirebaseFirestore.getInstance().collection("Game")
         ref.document(game.id).set(game)
         listenForChanges()
@@ -64,7 +65,6 @@ class FireBaseService {
             Log.e("Firebase", "Error updating online game", e)
         }
     }
-
     fun listenForChanges(){
         val gameRef = ref.document(game.id)
         gameRef.addSnapshotListener { snapshot, e ->
@@ -74,8 +74,9 @@ class FireBaseService {
             }
             if (snapshot != null && snapshot.exists()) {
                 game = snapshot.toObject(Game::class.java)!!
-                println("Test lll")
-                println(game.toString())
+                gameLiveData.value = game
+                println("Hiii")
+                println(gameLiveData.toString())
             } else {
                 Log.d(TAG, "Current data: null")
             }

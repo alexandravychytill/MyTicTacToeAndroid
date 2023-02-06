@@ -6,9 +6,10 @@ data class Game(
     var player2Id: String,
     var blockMoveForPlayerId: String,
     var winnningPlayerId: String,
+    var isGameActiv: Boolean,
     var moves: List<Move>
 ){
-    constructor(): this("", "", "", "", "", emptyList())
+    constructor(): this("", "", "", "", "", false, emptyList())
 }
 
 data class Move(

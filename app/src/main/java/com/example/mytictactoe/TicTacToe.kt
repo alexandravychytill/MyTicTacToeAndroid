@@ -1,22 +1,32 @@
 package com.example.mytictactoe
 
+import android.content.ContentValues
 import android.content.Intent
 import android.graphics.Color
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.Observer
+import com.example.mytictactoe.model.Game
 import com.example.mytictactoe.model.Move
 import com.example.mytictactoe.model.User
 import com.example.mytictactoe.model.UserViewModel
-import kotlin.collections.ArrayList
 
 class TicTacToe : AppCompatActivity() {
 
     private lateinit var userViewModel: UserViewModel
-    private lateinit var fireBaseService: FireBaseService
+    lateinit var fireBaseService: FireBaseService
     private lateinit var currentUser: User
+    private var hasGameStarted: Boolean = false
+    private var onCreateCalled = false
+
+    private val winPatterns: Set<Set<Int>> = setOf(
+        setOf(0, 1, 2), setOf(3, 4, 5), setOf(6, 7, 8),
+        setOf(0, 3, 6), setOf(1, 4, 7), setOf(2, 5, 8),
+        setOf(0, 4, 8), setOf(2, 4, 6)
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,20 +34,38 @@ class TicTacToe : AppCompatActivity() {
         supportActionBar?.hide()
         var quitButton = findViewById<Button>(R.id.end_button)
         fireBaseService = FireBaseService()
+        onCreateCalled = true
+
+        val buttonList = listOf<Button>(
+            findViewById<Button>(R.id.button1),
+            findViewById<Button>(R.id.button2),
+            findViewById<Button>(R.id.button3),
+            findViewById<Button>(R.id.button4),
+            findViewById<Button>(R.id.button5),
+            findViewById<Button>(R.id.button6),
+            findViewById<Button>(R.id.button7),
+            findViewById<Button>(R.id.button8),
+            findViewById<Button>(R.id.button9)
+        )
+
         userViewModel = UserViewModel(this)
-        if (userViewModel.currentUser == null) {
-            userViewModel.currentUser = User()
-        }
+        currentUser = userViewModel.currentUser!!
 
         // start the game
-        fireBaseService.startGame(userViewModel.currentUser!!.id)
+        currentUser.id?.let { fireBaseService.startGame(it) }
 
-        // quit game button
         quitButton.setOnClickListener {
             fireBaseService.endTheGame(fireBaseService.getGame())
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
         }
+
+        fireBaseService.gameLiveData.observe(this, Observer { game ->
+            println("FUnktionnierttt!!!!")
+            findViewById<Button>(R.id.button1).text = game.moves[0].indicator
+            quitButton.text = game.player2Id
+            updateButtonView(game, buttonList)
+        })
     }
 
     fun checkIfGameIsOver() {
@@ -54,73 +82,84 @@ class TicTacToe : AppCompatActivity() {
         }
     }
 
-    fun checkForGameBoardStatus(): Boolean{
+    fun resetGame() {
+        fireBaseService.getGame().moves =
+            listOf(Move(0), Move(1), Move(2), Move(3), Move(4), Move(5), Move(6), Move(7), Move(8))
+        fireBaseService.getGame().blockMoveForPlayerId = "player2"
+    }
+
+    fun checkForGameBoardStatus(): Boolean {
         return fireBaseService.getGame().blockMoveForPlayerId != currentUser.id
     }
 
+    fun processPlayerMove(position: Int, isPlayer1: Boolean, indicator: String): Boolean {
+        val builder = AlertDialog.Builder(this@TicTacToe)
 
-    fun processPlayerMove(position: Int, isPlayer1: Boolean , indicator: String){
+        if (isButtonOccupied(fireBaseService.getGame().moves, position)) {
+            return false
+        }
 
-       // println(game.toString())
-      //  println(isSquareOccupied(game.moves, position))
-
-      //  if (isSquareOccupied(game.moves, position)) {
-      //      return
-       // }
-
+        // update game with new move changes
+        fireBaseService.getGame().isGameActiv = true
         fireBaseService.getGame().moves[position].isPlayer1 = isPlayer1
         fireBaseService.getGame().moves[position].boardIndex = position
         fireBaseService.getGame().moves[position].indicator = indicator
-
+        fireBaseService.getGame().blockMoveForPlayerId = currentUser.id.toString()
         fireBaseService.updateGame()
 
-        println(fireBaseService.getGame().toString())
-       // fireBaseService.getGame().blockMoveForPlayerId = "player2"
-
-       /* val win = checkForWinCondition(true, game.moves)
-        if (win) {
-            alertItem = null
-            alertItem = AlertContent.WINNER
-            Log.d("Game", "You have won!")
-            return
+        if (checkWinCondition(isPlayerOne(), fireBaseService.getGame().moves)) {
+            fireBaseService.getGame().winnningPlayerId = currentUser.id.toString()
+            fireBaseService.updateGame()
+            // Alert
+            builder.setTitle("You won!")
+            builder.setMessage("The Game is over")
+            builder.setPositiveButton("Rematch") { dialog, which -> resetGame() }
+            builder.setNegativeButton("Quit") { dialog, which ->
+                fireBaseService.endTheGame(
+                    fireBaseService.getGame()
+                )
+            }
+            val dialog: AlertDialog = builder.create()
+            dialog.show()
         }
-
-        val draw = checkForDraw(game.moves)
-        if (draw) {
-            alertItem = null
-            alertItem = AlertContent.NO_WINNER
-            return
+/*
+         if(checkForDraw(fireBaseService.getGame().moves)){
+            fireBaseService.getGame().winnningPlayerId = "0"
+            fireBaseService.updateGame()
+            // Alert
+            builder.setTitle("Draw")
+            builder.setMessage("The Game is over")
+            builder.setPositiveButton("Rematch"){dialog, which -> resetGame()}
+            builder.setNegativeButton("Quit"){dialog, which -> fireBaseService.endTheGame(fireBaseService.getGame())}
+            val dialog: AlertDialog = builder.create()
+            dialog.show()
         }
         */
+        return true
     }
 
-    fun isSquareOccupied(moves: List<Move?>, index: Int): Boolean {
+    fun isPlayerOne(): Boolean {
+        return fireBaseService.getGame().player1Id == currentUser.id ?: false
+    }
+
+    fun isButtonOccupied(moves: List<Move?>, index: Int): Boolean {
         return moves.any { it?.boardIndex == index }
     }
 
-    fun updateButtonView(){
-        val buttonList = listOf<Button>(
-            findViewById(R.id.button1),
-            findViewById(R.id.button2),
-            findViewById(R.id.button3),
-            findViewById(R.id.button4),
-            findViewById(R.id.button5),
-            findViewById(R.id.button6),
-            findViewById(R.id.button7),
-            findViewById(R.id.button8),
-            findViewById(R.id.button9)
-        )
-
-
-        for (i in 0 until buttonList.size) {
-            if (fireBaseService.getGame().moves[i].id == i) {
-                buttonList[i].isEnabled = false
+    fun updateButtonView(game: Game, buttonList: List<Button>){
+            for (move in fireBaseService.getGame().moves) {
+                for (button in buttonList) {
+                    if (button.id == move.id) {
+                        if (move.id != null) {
+                            button.text = move.indicator
+                            break
+                        }
+                    }
+                }
             }
-        }
-
     }
 
-    fun buClick(view: View) {
+    fun buttonClicked(view: View) {
         val buSelected = view as Button
         var cellID = 0
         when (buSelected.id) {
@@ -135,131 +174,41 @@ class TicTacToe : AppCompatActivity() {
             R.id.button9 -> cellID = 8
         }
         playGame(cellID, buSelected)
+
     }
-
-    var player1 = ArrayList<Int>()
-    var player2 = ArrayList<Int>()
-
-    var isPlayer1 = true
 
     private fun playGame(cellID: Int, buSelected: Button) {
-        if (isPlayer1) {
-            buSelected.text = "✕"
-            buSelected.setTextColor((Color.parseColor("#FFFFFF")))
-            processPlayerMove(cellID, isPlayer1, "✕")
-            isPlayer1 = false
-        }
-        else {
-            buSelected.text = "◯"
-            buSelected.setTextColor(Color.parseColor("#FFFFFF"))
-            processPlayerMove(cellID, isPlayer1, "◯")
-            isPlayer1 = true
-        }
-        buSelected.isEnabled = false
-
-      //  WhoIsTheWinner()
-    }
-
-    private fun WhoIsTheWinner(): Int {
-        var winner = -1
-
-        //column1
-        //row1
-        if (player1.contains(1) && player1.contains(2) && player1.contains(3)) {
-            winner = 1
-        }
-
-        if (player2.contains(1) && player2.contains(2) && player2.contains(3)) {
-            winner = 2
-        }
-
-        //row2
-        if (player1.contains(4) && player1.contains(5) && player1.contains(6)) {
-            winner = 1
-        }
-
-        if (player2.contains(4) && player2.contains(5) && player2.contains(6)) {
-            winner = 2
-        }
-
-        //row3
-        if (player1.contains(7) && player1.contains(8) && player1.contains(9)) {
-            winner = 1
-        }
-
-        if (player2.contains(7) && player2.contains(8) && player2.contains(9)) {
-            winner = 2
-        }
-
-        //column2
-        //1,5,9
-        if (player1.contains(2) && player1.contains(5) && player1.contains(8)) {
-            winner = 1
-        }
-
-        if (player2.contains(2) && player2.contains(5) && player2.contains(8)) {
-            winner = 2
-        }
-
-        //3,6,9
-        if (player1.contains(3) && player1.contains(6) && player1.contains(9)) {
-            winner = 1
-        }
-
-        if (player2.contains(3) && player2.contains(6) && player2.contains(9)) {
-            winner = 2
-        }
-
-        //1,4,7
-        if (player1.contains(1) && player1.contains(4) && player1.contains(7)) {
-            winner = 1
-        }
-
-        if (player2.contains(1) && player2.contains(4) && player2.contains(7)) {
-            winner = 2
-        }
-
-        //1,5,9
-        if (player1.contains(1) && player1.contains(5) && player1.contains(9)) {
-            winner = 1
-        }
-
-        if (player2.contains(1) && player2.contains(5) && player2.contains(9)) {
-            winner = 2
-
-        }
-
-        //3,5,7
-        if (player1.contains(3) && player1.contains(5) && player1.contains(7)) {
-            winner = 1
-        }
-
-        if (player2.contains(3) && player2.contains(5) && player2.contains(7)) {
-            winner = 2
-        }
-
-        val builder = AlertDialog.Builder(this@TicTacToe)
-        builder.setTitle("Winner")
-        if (winner != -1) {
-            if (winner == 1) {
-                //Toast.makeText(this, "Player 1 won the game.", Toast.LENGTH_SHORT).show()
-                builder.setTitle("You won!")
-                builder.setMessage("The Game is over")
-                builder.setPositiveButton("Rematch"){dialog, which -> finish()}
-                builder.setNegativeButton("Quit"){dialog, which -> finish()}
-                val dialog: AlertDialog = builder.create()
-                dialog.show()
-            } else
-            {
-                builder.setMessage("Other player won the game.")
-                builder.setPositiveButton("Rematch"){dialog, which -> finish()}
-                builder.setNegativeButton("Quit"){dialog, which -> finish()}
-                val dialog: AlertDialog = builder.create()
-                dialog.show()
+        if(checkForGameBoardStatus()) {
+            if (processPlayerMove(cellID, fireBaseService.getGame().player1Id == currentUser.id, "✕")) {
+                if (fireBaseService.getGame().player1Id == currentUser.id) {
+                    buSelected.text = "✕"
+                    buSelected.setTextColor((Color.parseColor("#FFFFFF")))
+                } else {
+                    buSelected.text = "◯"
+                    buSelected.setTextColor(Color.parseColor("#FFFFFF"))
+                }
+                buSelected.isEnabled = false
 
             }
-            return winner
         }
-        return 0
+    }
+
+    fun checkWinCondition(player: Boolean, moves: List<Move?>): Boolean {
+        // remove all nils from the array and filter moves of the player only
+        val playerMoves = moves.filterNotNull().filter { it.isPlayer1 == player }
+        val playerPositions = playerMoves.map { it.boardIndex }.toSet()
+
+        // go through winPatterns [0,1,2] and check if my playerPositions match with winPattern we have a win
+        for (pattern in winPatterns) {
+            if (playerPositions.containsAll(pattern)){
+                return true
+            }
+        }
+        return false
+    }
+
+    fun checkForDraw(moves: List<Move?>): Boolean {
+        return moves.filterNotNull().count() == 9
     }
 }
+
