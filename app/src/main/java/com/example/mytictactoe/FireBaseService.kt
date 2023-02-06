@@ -47,7 +47,7 @@ class FireBaseService {
 
     fun createOnlineGame(userId: String): Game {
         db.collection("Game")
-        game = Game(UUID.randomUUID().toString(), userId, "", userId, "",true, listOf(Move(0), Move(1), Move(2), Move(3), Move(4), Move(5), Move(6), Move(7), Move(8)))
+        game = Game(UUID.randomUUID().toString(), userId, "", userId, "", listOf(Move(0), Move(1), Move(2), Move(3), Move(4), Move(5), Move(6), Move(7), Move(8)))
         val ref = FirebaseFirestore.getInstance().collection("Game")
         ref.document(game.id).set(game)
         listenForChanges()
@@ -75,10 +75,11 @@ class FireBaseService {
             if (snapshot != null && snapshot.exists()) {
                 game = snapshot.toObject(Game::class.java)!!
                 gameLiveData.value = game
-                println("Hiii")
-                println(gameLiveData.toString())
+
             } else {
                 Log.d(TAG, "Current data: null")
+                game = Game()
+                gameLiveData.value = game
             }
         }
     }
